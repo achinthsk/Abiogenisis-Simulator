@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>Abiogenesis Simulator</title>
+<script>
+(function(){
+  var connected=false;
+  function connect(){
+    var es=new EventSource('/livereload');
+    es.onopen=function(){if(connected){location.reload();}connected=true;};
+    es.onerror=function(){es.close();connected=false;setTimeout(connect,1200);};
+  }
+  connect();
+})();
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#03050f;
+  --surface:rgba(8,11,26,0.88);
+  --surface2:rgba(12,16,36,0.92);
+  --surface3:rgba(16,21,46,0.7);
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --text:#f0f2ff;
+  --text2:#b8bcd8;
+  --muted:#6b7094;
+  --green:#00d4a0;
+  --green-dim:rgba(0,212,160,0.15);
+  --green-glow:rgba(0,212,160,0.25);
+  --blue:#4d9fff;
+  --blue-dim:rgba(77,159,255,0.15);
+  --amber:#ffb347;
+  --amber-dim:rgba(255,179,71,0.15);
+  --red:#ff5566;
+  --red-dim:rgba(255,85,102,0.15);
+  --purple:#9d7fff;
+  --purple-dim:rgba(157,127,255,0.15);
+  --mono:'Space Mono',monospace;
+  --sans:'Space Grotesk',system-ui,sans-serif;
+  --radius:14px;
+  --radius-sm:8px;
+}
+
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text2);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.6;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+canvas#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+#app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+
+/* ── NAV ── */
+nav{
+  background:rgba(3,5,15,0.85);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+  height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  position:sticky;
+  top:0;
+  z-index:100;
+}
+.logo{
+  font-family:var(--mono);
+  font-size:13px;
+  letter-spacing:0.2em;
+  color:var(--green);
+  text-transform:uppercase;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.logo-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 12px var(--green);
+  animation:pulse-dot 2.5s ease-in-out infinite;
+}
+@keyframes pulse-dot{0%,100%{opacity:1;box-shadow:0 0 8px var(--green)}50%{opacity:.5;box-shadow:0 0 20px var(--green)}}
+.logo-sub{color:var(--muted);font-size:.72em;letter-spacing:.12em}
+.tabs{display:flex;gap:4px;background:rgba(255,255,255,0.04);padding:4px;border-radius:10px;border:1px solid var(--border)}
+.tab{
+  padding:6px 18px;
+  border:none;
+  border-radius:7px;
+  cursor:pointer;
+  font-size:12px;
+  font-family:var(--mono);
+  font-weight:700;
+  color:var(--muted);
+  background:transparent;
+  transition:all .2s;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.tab.active{background:rgba(0,212,160,0.12);color:var(--green);box-shadow:0 0 20px rgba(0,212,160,0.08)}
+.tab:hover:not(.active){color:var(--text2)}
+
+/* ── LAYOUT ── */
+main{
+  display:grid;
+  grid-template-columns:360px 1fr;
+  flex:1;
+  max-width:1440px;
+  margin:0 auto;
+  width:100%;
+  padding:20px 20px;
+  gap:16px;
+}
+
+/* ── PANELS ── */
+.panel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  overflow:hidden;
+}
+.panel-header{
+  padding:14px 20px;
+  border-bottom:1px solid var(--border);
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.panel-header::before{content:'';width:3px;height:12px;background:var(--green);border-radius:2px;display:inline-block}
+
+/* ── INPUT PANEL ── */
+.input-panel{display:flex;flex-direction:column;height:calc(100vh - 100px);position:sticky;top:80px}
+.groups{overflow-y:auto;flex:1;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.groups::-webkit-scrollbar{width:3px}
+.groups::-webkit-scrollbar-track{background:transparent}
+.groups::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+.group{padding:16px 20px;border-bottom:1px solid var(--border)}
+.group-title{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+  color:var(--green);
+  margin-bottom:14px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.group-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(0,212,160,0.2),transparent)}
+
+/* ── SLIDERS ── */
+.slider-row{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px;margin-bottom:10px}
+.slider-label{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.04em}
+input[type=range]{
+  width:100%;
+  -webkit-appearance:none;
+  height:2px;
+  border-radius:2px;
+  background:rgba(255,255,255,0.1);
+  outline:none;
+  cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:14px;height:14px;
+  border-radius:50%;
+  background:var(--green);
+  cursor:pointer;
+  transition:all .15s;
+  box-shadow:0 0 8px rgba(0,212,160,0.4);
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3);box-shadow:0 0 16px rgba(0,212,160,0.6)}
+.slider-val{
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--text);
+  font-weight:700;
+  text-align:right;
+}
+
+.atm-total{
+  font-family:var(--mono);
+  font-size:10px;
+  padding:4px 10px;
+  border-radius:20px;
+  display:inline-block;
+  margin-top:4px;
+  letter-spacing:.06em;
+}
+.atm-total.ok{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.25)}
+.atm-total.bad{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,85,102,0.25)}
+
+/* ── SELECTS / TOGGLES ── */
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+select,input[type=number]{
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border2);
+  color:var(--text);
+  padding:7px 10px;
+  border-radius:var(--radius-sm);
+  font-size:12px;
+  font-family:var(--sans);
+  outline:none;
+  width:100%;
+  transition:border-color .2s;
+}
+select:focus,input[type=number]:focus{border-color:var(--green)}
+select option{background:#0d1024}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:2px 0}
+.toggle-row label{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.04em}
+.toggle{width:40px;height:22px;background:rgba(255,255,255,0.08);border:1px solid var(--border2);border-radius:11px;position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}
+.toggle.on{background:rgba(0,212,160,0.25);border-color:rgba(0,212,160,0.4);box-shadow:0 0 12px rgba(0,212,160,0.15)}
+.toggle::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:all .2s}
+.toggle.on::after{left:21px;background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* ── PLANET SELECT ── */
+.planet-section{padding:16px 20px}
+.planet-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.badge-jwst{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.3)}
+.badge-lit{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.3)}
+.badge-est{background:rgba(107,112,148,0.15);color:var(--muted);border:1px solid var(--border)}
+.planet-info{margin-top:10px;padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;color:var(--muted);min-height:36px;line-height:1.5}
+
+/* ── RUN BUTTON ── */
+.run-btn{
+  margin:14px 20px 18px;
+  padding:14px;
+  background:linear-gradient(135deg,rgba(0,212,160,0.9),rgba(0,160,120,0.9));
+  border:none;
+  color:#fff;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  font-size:13px;
+  font-family:var(--mono);
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  transition:all .2s;
+  width:calc(100% - 40px);
+  position:relative;
+  overflow:hidden;
+}
+.run-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.1),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.run-btn:hover:not(:disabled){
+  transform:translateY(-2px);
+  box-shadow:0 8px 30px rgba(0,212,160,0.35);
+}
+.run-btn:hover:not(:disabled)::before{opacity:1}
+.run-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* ── RESULTS PANEL ── */
+.results-panel{display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 100px)}
+.empty-state{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:var(--muted);
+  gap:16px;
+  padding:80px 20px;
+  text-align:center;
+}
+.empty-icon{
+  width:64px;height:64px;
+  border-radius:50%;
+  border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+  color:var(--muted);
+  background:rgba(255,255,255,0.02);
+}
+.empty-state p{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  line-height:1.8;
+  color:var(--muted);
+  text-transform:uppercase;
+}
+
+/* ── VERDICT ── */
+.verdict-box{
+  padding:24px 28px;
+  border-radius:var(--radius);
+  border:1px solid;
+  position:relative;
+  overflow:hidden;
+}
+.verdict-box::before{
+  content:'';
+  position:absolute;
+  top:-40px;right:-40px;
+  width:200px;height:200px;
+  border-radius:50%;
+  filter:blur(60px);
+  opacity:.3;
+  pointer-events:none;
+}
+.verdict-box.green{background:linear-gradient(135deg,rgba(0,212,160,0.08),rgba(3,5,15,0.9));border-color:rgba(0,212,160,0.25)}
+.verdict-box.green::before{background:var(--green)}
+.verdict-box.blue{background:linear-gradient(135deg,rgba(77,159,255,0.08),rgba(3,5,15,0.9));border-color:rgba(77,159,255,0.25)}
+.verdict-box.blue::before{background:var(--blue)}
+.verdict-box.amber{background:linear-gradient(135deg,rgba(255,179,71,0.08),rgba(3,5,15,0.9));border-color:rgba(255,179,71,0.25)}
+.verdict-box.amber::before{background:var(--amber)}
+.verdict-box.red{background:linear-gradient(135deg,rgba(255,85,102,0.08),rgba(3,5,15,0.9));border-color:rgba(255,85,102,0.25)}
+.verdict-box.red::before{background:var(--red)}
+
+.verdict-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.verdict-planet{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+.verdict-text{font-size:24px;font-weight:700;letter-spacing:.02em;line-height:1}
+.verdict-text.green{color:var(--green);text-shadow:0 0 30px rgba(0,212,160,0.4)}
+.verdict-text.blue{color:var(--blue);text-shadow:0 0 30px rgba(77,159,255,0.4)}
+.verdict-text.amber{color:var(--amber);text-shadow:0 0 30px rgba(255,179,71,0.4)}
+.verdict-text.red{color:var(--red);text-shadow:0 0 30px rgba(255,85,102,0.4)}
+.verdict-score{font-family:var(--mono);font-size:56px;font-weight:700;line-height:1;letter-spacing:-.03em}
+.verdict-score.green{color:var(--green)}
+.verdict-score.blue{color:var(--blue)}
+.verdict-score.amber{color:var(--amber)}
+.verdict-score.red{color:var(--red)}
+
+/* ── STAGE CARDS ── */
+.stages-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stage-card{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px;
+  transition:all .2s;
+  position:relative;
+  overflow:hidden;
+}
+.stage-card:hover{border-color:rgba(0,212,160,0.2);background:rgba(12,16,36,0.98)}
+.stage-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.stage-name{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.stage-pct{font-family:var(--mono);font-size:24px;font-weight:700;line-height:1}
+.progress{height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin:10px 0}
+.progress-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1)}
+.stage-reason{font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:8px}
+.src-badge{
+  font-family:var(--mono);
+  font-size:8px;
+  padding:2px 7px;
+  border-radius:3px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.src-ml{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.2)}
+.src-rule{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
+
+/* ── MOLECULE CARDS ── */
+.mol-toggle{
+  display:flex;align-items:center;gap:6px;
+  margin-top:10px;padding:6px 0 0;
+  border-top:1px solid var(--border);
+  background:transparent;border-left:none;border-right:none;border-bottom:none;
+  color:var(--muted);
+  font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;width:100%;text-align:left;transition:color .15s;
+}
+.mol-toggle:hover{color:var(--green)}
+.mol-chevron{display:inline-block;transition:transform .2s;font-size:.7rem;font-style:normal}
+.mol-toggle.open .mol-chevron{transform:rotate(90deg)}
+.mol-drawer{display:none;flex-direction:column;gap:6px;margin-top:8px}
+.mol-drawer.open{display:flex}
+.mol-row{
+  padding:12px 14px;
+  background:rgba(3,5,15,0.6);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  transition:border-color .15s;
+  display:flex;flex-direction:column;gap:4px;
+}
+.mol-row:hover{border-color:rgba(77,159,255,0.25)}
+.mol-row-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.mol-name{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text)}
+.mol-formula{font-family:var(--mono);font-size:10px;color:var(--blue);background:var(--blue-dim);padding:2px 7px;border-radius:4px;border:1px solid rgba(77,159,255,0.15)}
+.mol-stability{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:20px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.mol-stability.high{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.2)}
+.mol-stability.mid{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
+.mol-stability.low{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,85,102,0.2)}
+.mol-state{font-family:var(--mono);font-size:9px;color:var(--muted);border:1px solid var(--border);padding:2px 6px;border-radius:4px}
+.mol-props{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.mol-prop-line{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)}
+.mol-prop-formula{font-family:var(--mono);color:var(--text);font-size:11px}
+.mol-prop-mw{color:var(--muted);font-size:11px}
+.mol-prop-sep{color:var(--border2);font-size:10px}
+.mol-prop-logp-label{color:var(--muted);font-size:10px;font-family:var(--mono)}
+.mol-prop-logp-val{font-family:var(--mono);font-size:11px;color:var(--text)}
+.mol-prop-logp-water{color:#7dd3fc;font-size:10px;font-family:var(--mono)}
+.mol-prop-logp-lipid{color:var(--amber);font-size:10px;font-family:var(--mono)}
+.mol-stab-bar-track{width:100%;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-top:4px}
+.mol-stab-bar-fill{height:100%;border-radius:2px;transition:width .6s}
+.mol-stab-bar-fill.high{background:var(--green)}
+.mol-stab-bar-fill.mid{background:var(--amber)}
+.mol-stab-bar-fill.low{background:var(--red)}
+.mol-why{font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px;font-style:italic}
+.mol-struct-btn{
+  margin-top:6px;padding:4px 10px;
+  background:transparent;
+  border:1px solid var(--border2);
+  color:var(--muted);
+  border-radius:5px;
+  cursor:pointer;
+  font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+  transition:all .15s;display:inline-flex;align-items:center;gap:5px;
+}
+.mol-struct-btn:hover{border-color:var(--blue);color:var(--blue)}
+.mol-struct-btn.active{border-color:var(--blue);color:var(--blue);background:var(--blue-dim)}
+.mol-struct-wrap{display:none;margin-top:8px;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);background:#020409;text-align:center}
+.mol-struct-wrap.open{display:block}
+.mol-struct-wrap img{display:block;width:220px;height:160px;margin:0 auto}
+.mol-struct-loading{padding:20px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+.mol-struct-err{padding:10px;font-family:var(--mono);font-size:9px;color:var(--red)}
+
+/* ── BIOCHEM ── */
+.bio-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.bio-pill{padding:5px 16px;border-radius:20px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.25)}
+.proto-score{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.proto-score span{color:var(--text);font-weight:700}
+
+/* ── PLANET PROFILE ── */
+.profile-card{
+  border-left:3px solid var(--green);
+  background:var(--surface2);
+  border-top:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:20px 22px;
+  position:relative;
+  overflow:hidden;
+}
+.profile-card::before{
+  content:'';position:absolute;top:-30px;right:-30px;
+  width:120px;height:120px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,212,160,0.08),transparent 70%);
+  pointer-events:none;
+}
+.profile-title{
+  font-family:var(--mono);font-size:9px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--green);
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;
+}
+.profile-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(0,212,160,0.2),transparent)}
+.profile-body{font-size:13px;color:var(--text2);line-height:1.85}
+
+/* ── LIFE FORM ── */
+.life-card{
+  border-left:3px solid var(--amber);
+  background:var(--surface2);
+  border-top:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:20px 22px;
+  position:relative;overflow:hidden;
+}
+.life-card::before{
+  content:'';position:absolute;top:-30px;right:-30px;
+  width:120px;height:120px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,179,71,0.06),transparent 70%);
+  pointer-events:none;
+}
+.life-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+.life-card-label{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber)}
+.life-conf-badge{
+  font-family:var(--mono);font-size:8px;letter-spacing:.1em;padding:3px 10px;
+  border-radius:20px;flex-shrink:0;text-transform:uppercase;font-weight:700;
+}
+.life-conf-badge.green{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,212,160,0.25)}
+.life-conf-badge.blue{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.25)}
+.life-conf-badge.amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.25)}
+.life-conf-badge.red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,85,102,0.25)}
+.life-org-name{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:.02em}
+.life-desc{font-size:13px;color:var(--text2);line-height:1.75;margin-bottom:12px}
+.life-traits{display:flex;flex-wrap:wrap;gap:5px}
+.life-trait{
+  font-family:var(--mono);font-size:9px;padding:3px 10px;border-radius:4px;
+  background:rgba(255,179,71,0.08);color:var(--amber);
+  border:1px solid rgba(255,179,71,0.18);letter-spacing:.04em;text-transform:uppercase;
+}
+
+/* ── TIMELINE ── */
+.evo-timeline{
+  background:var(--surface2);
+  border-top:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  border-left:3px solid var(--blue);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:20px 22px;
+}
+.evo-title{
+  font-family:var(--mono);font-size:9px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--blue);
+  margin-bottom:18px;display:flex;align-items:center;gap:8px;
+}
+.evo-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(77,159,255,0.2),transparent)}
+.evo-track{display:flex;flex-direction:column;padding-left:20px;position:relative}
+.evo-track::before{content:'';position:absolute;left:6px;top:8px;bottom:8px;width:2px;background:linear-gradient(180deg,var(--green),var(--blue),var(--muted));opacity:.2;border-radius:2px}
+.evo-node{display:flex;align-items:flex-start;gap:16px;padding:10px 0;position:relative}
+.evo-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;position:relative;z-index:1}
+.evo-dot.active-high{background:var(--green);box-shadow:0 0 10px rgba(0,212,160,0.5)}
+.evo-dot.active-mid{background:var(--amber);box-shadow:0 0 10px rgba(255,179,71,0.4)}
+.evo-dot.inactive{background:transparent;border:1px solid rgba(255,255,255,0.12)}
+.evo-dot.proto{background:var(--green);animation:proto-pulse 2s ease-out infinite}
+@keyframes proto-pulse{0%{box-shadow:0 0 0 0 rgba(0,212,160,0.6)}70%{box-shadow:0 0 0 12px rgba(0,212,160,0)}100%{box-shadow:0 0 0 0 rgba(0,212,160,0)}}
+.evo-content{flex:1;min-width:0}
+.evo-content-inactive{opacity:.35}
+.evo-time{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:2px;letter-spacing:.06em}
+.evo-stage-name{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);letter-spacing:.02em}
+.evo-proto-label{font-family:var(--mono);font-size:12px;color:var(--green);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.evo-mol{font-size:11px;color:var(--muted);font-style:italic;margin-top:2px}
+.evo-score{font-family:var(--mono);font-size:10px;font-weight:700;margin-top:3px}
+.evo-inactive-label{font-size:11px;color:var(--muted);font-style:italic;margin-top:2px}
+
+/* ── VALIDATION ── */
+.val-section{margin-top:4px}
+.val-btn{
+  padding:9px 18px;background:transparent;
+  border:1px solid var(--border2);color:var(--muted);
+  border-radius:var(--radius-sm);cursor:pointer;
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  transition:all .2s;
+}
+.val-btn:hover{border-color:var(--blue);color:var(--blue)}
+.val-header{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--blue);margin-bottom:4px}
+.val-sub{font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);letter-spacing:.04em}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text2)}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.pass{color:var(--green);font-weight:700;font-family:var(--mono)}
+.fail{color:var(--red);font-family:var(--mono)}
+
+/* ── MISC ── */
+.spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{position:absolute;inset:0;background:rgba(3,5,15,0.7);display:flex;align-items:center;justify-content:center;border-radius:var(--radius);z-index:5;backdrop-filter:blur(6px)}
+.error-box{background:var(--red-dim);border:1px solid rgba(255,85,102,0.3);border-radius:var(--radius-sm);padding:14px 18px;font-size:12px;color:var(--red);line-height:1.6}
+.hidden{display:none!important}
+
+@media(max-width:960px){
+  main{grid-template-columns:1fr;padding:12px}
+  .input-panel{height:auto;position:static}
+  .stages-grid{grid-template-columns:1fr}
+  nav{padding:0 16px}
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="app">
+
+<nav>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Abiogenesis<span class="logo-sub"> // Simulator v2</span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="manual">Manual Planet</button>
+    <button class="tab" data-tab="exo">Exoplanets</button>
+  </div>
+</nav>
+
+<main>
+  <!-- INPUT PANEL -->
+  <div class="panel input-panel" style="position:relative">
+    <div class="panel-header" id="panel-title">Configure Planet Parameters</div>
+    <div class="groups" id="input-groups">
+
+      <!-- MANUAL TAB -->
+      <div id="tab-manual">
+        <div class="group">
+          <div class="group-title">Atmosphere Composition</div>
+          <div class="slider-row"><span class="slider-label">CH₄</span><input type="range" min="0" max="100" value="10" id="s_ch4"><span class="slider-val" id="v_ch4">10%</span></div>
+          <div class="slider-row"><span class="slider-label">NH₃</span><input type="range" min="0" max="100" value="5" id="s_nh3"><span class="slider-val" id="v_nh3">5%</span></div>
+          <div class="slider-row"><span class="slider-label">H₂</span><input type="range" min="0" max="100" value="15" id="s_h2"><span class="slider-val" id="v_h2">15%</span></div>
+          <div class="slider-row"><span class="slider-label">CO₂</span><input type="range" min="0" max="100" value="10" id="s_co2"><span class="slider-val" id="v_co2">10%</span></div>
+          <div class="slider-row"><span class="slider-label">N₂</span><input type="range" min="0" max="100" value="55" id="s_n2"><span class="slider-val" id="v_n2">55%</span></div>
+          <div class="slider-row"><span class="slider-label">H₂O</span><input type="range" min="0" max="100" value="5" id="s_h2o"><span class="slider-val" id="v_h2o">5%</span></div>
+          <div><span class="atm-total ok" id="atm-total">Total: 100%</span></div>
+        </div>
+        <div class="group">
+          <div class="group-title">Energy Sources</div>
+          <div class="slider-row"><span class="slider-label">Temp°C</span><input type="range" min="-200" max="500" value="25" id="s_temp"><span class="slider-val" id="v_temp">25°C</span></div>
+          <div class="slider-row"><span class="slider-label">⚡/day</span><input type="range" min="0" max="5000" value="100" id="s_lightning"><span class="slider-val" id="v_lightning">100</span></div>
+          <div class="slider-row"><span class="slider-label">Geo mW</span><input type="range" min="0" max="500" value="60" id="s_geo"><span class="slider-val" id="v_geo">60</span></div>
+          <div class="row">
+            <div class="field"><label>UV Flux</label><select id="s_uv"><option>low</option><option selected>medium</option><option>high</option></select></div>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title">Environment</div>
+          <div class="slider-row"><span class="slider-label">pH</span><input type="range" min="0" max="14" step="0.1" value="7" id="s_ph"><span class="slider-val" id="v_ph">7.0</span></div>
+          <div class="slider-row"><span class="slider-label">Gravity</span><input type="range" min="0.1" max="5" step="0.1" value="1" id="s_grav"><span class="slider-val" id="v_grav">1.0g</span></div>
+          <div class="row">
+            <div class="field"><label>Solvent</label><select id="s_solvent"><option selected>water</option><option>ammonia</option><option>methane</option></select></div>
+            <div class="field"><label>Clay</label><select id="s_clay"><option selected>none</option><option>montmorillonite</option><option>kaolinite</option></select></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Phosphate</label><select id="s_phos"><option>low</option><option selected>medium</option><option>high</option></select></div>
+            <div class="field"><label>Metal Ions</label><select id="s_metals"><option>low</option><option selected>medium</option><option>high</option></select></div>
+          </div>
+          <div class="toggle-row"><label>Hydrothermal Vents</label><div class="toggle on" id="t_vents" data-val="yes"></div></div>
+          <div class="row">
+            <div class="field"><label>Wet-Dry Cycles</label><select id="s_wetdry"><option>none</option><option selected>tidal</option><option>volcanic</option></select></div>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title">Temporal Stability</div>
+          <div class="slider-row"><span class="slider-label">Myr</span><input type="range" min="1" max="500" value="100" id="s_dur"><span class="slider-val" id="v_dur">100</span></div>
+          <div class="row">
+            <div class="field"><label>UV Variability</label><select id="s_uvvar"><option selected>low</option><option>medium</option><option>high</option></select></div>
+            <div class="field"><label>Temp Swings</label><select id="s_tswing"><option selected>low</option><option>medium</option><option>high</option></select></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Impact Events</label><select id="s_impact"><option selected>low</option><option>medium</option><option>high</option></select></div>
+            <div class="field"><label>Volcanic Activity</label><select id="s_volc"><option selected>low</option><option>medium</option><option>high</option></select></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Ocean Stability</label><select id="s_ocean"><option>low</option><option selected>medium</option><option>high</option></select></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXOPLANET TAB -->
+      <div id="tab-exo" class="hidden">
+        <div class="planet-section">
+          <div class="group-title" style="margin-bottom:12px">Select Exoplanet</div>
+          <select id="planet-select" style="width:100%;margin-bottom:10px"><option value="">— Loading planets… —</option></select>
+          <div id="planet-badge-row" style="margin-bottom:8px"></div>
+          <div class="planet-info" id="planet-info">Select a planet to load its parameters.</div>
+          <div id="exo-params-summary" style="margin-top:10px;font-size:11px;color:var(--muted);font-family:var(--mono)"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="run-btn" id="run-btn">▶ Run Simulation</button>
+    <div id="input-loading" class="loading-overlay hidden"><div class="spinner"></div></div>
+  </div>
+
+  <!-- RESULTS PANEL -->
+  <div class="panel results-panel" id="results-panel" style="position:relative;padding:20px">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">⬡</div>
+      <p>Configure parameters &amp; run simulation<br>to see abiogenesis analysis</p>
+    </div>
+    <div id="results-content" class="hidden" style="display:flex;flex-direction:column;gap:14px"></div>
+    <div id="results-loading" class="loading-overlay hidden"><div class="spinner"></div></div>
+  </div>
+</main>
+</div>
+
+<script>
+const API = '';
+
+// ─── CANVAS ───────────────────────────────────────────────────
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let stars=[], shooters=[], lastSpawn=0;
+function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;initStars()}
+function initStars(){
+  stars=[];
+  for(let i=0;i<220;i++) stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.2+.3,o:Math.random()*.5+.4});
+}
+function spawnShooter(){
+  if(shooters.length>=5) return;
+  const fromTop=Math.random()>.5;
+  const x=fromTop?Math.random()*canvas.width:canvas.width-Math.random()*200;
+  const y=fromTop?Math.random()*200:Math.random()*canvas.height*.4;
+  const len=100+Math.random()*100;
+  const dur=800+Math.random()*700;
+  shooters.push({x,y,len,dur,start:performance.now(),angle:Math.PI*.72+Math.random()*.2-.1});
+}
+function drawFrame(ts){
+  ctx.fillStyle='#03050f';ctx.fillRect(0,0,canvas.width,canvas.height);
+  stars.forEach(s=>{ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${s.o})`;ctx.fill()});
+  if(ts-lastSpawn>2000+Math.random()*2000){spawnShooter();lastSpawn=ts}
+  shooters=shooters.filter(s=>{
+    const p=Math.min((ts-s.start)/s.dur,1);
+    const ex=s.x+Math.cos(s.angle)*canvas.width*1.5*p;
+    const ey=s.y+Math.sin(s.angle)*canvas.height*1.5*p;
+    const tx=ex-Math.cos(s.angle)*s.len;
+    const ty=ey-Math.sin(s.angle)*s.len;
+    const fade=p<.8?1:1-(p-.8)/.2;
+    const g=ctx.createLinearGradient(tx,ty,ex,ey);
+    g.addColorStop(0,'rgba(255,255,255,0)');
+    g.addColorStop(1,`rgba(255,255,255,${.9*fade})`);
+    ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(ex,ey);
+    ctx.strokeStyle=g;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(ex,ey,2.5,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${fade})`;ctx.fill();
+    return p<1;
+  });
+  requestAnimationFrame(drawFrame);
+}
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+requestAnimationFrame(drawFrame);
+
+// ─── TABS ─────────────────────────────────────────────────────
+let activeTab='manual';
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  activeTab=t.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('tab-manual').classList.toggle('hidden',activeTab!=='manual');
+  document.getElementById('tab-exo').classList.toggle('hidden',activeTab!=='exo');
+  document.getElementById('panel-title').textContent=activeTab==='manual'?'Configure Planet Parameters':'Select Exoplanet';
+  if(activeTab==='exo' && !planetsLoaded) loadPlanets();
+}));
+
+// ─── ATMOSPHERE ───────────────────────────────────────────────
+const atmGases=['ch4','nh3','h2','co2','n2','h2o'];
+function updateAtm(){
+  const vals={};
+  atmGases.forEach(g=>vals[g]=+document.getElementById('s_'+g).value);
+  const others=atmGases.filter(g=>g!=='n2').reduce((s,g)=>s+vals[g],0);
+  const n2=Math.max(0,Math.min(100,100-others));
+  document.getElementById('s_n2').value=n2;
+  document.getElementById('v_n2').textContent=n2+'%';
+  const total=others+n2;
+  const el=document.getElementById('atm-total');
+  el.textContent='Total: '+total+'%';
+  el.className='atm-total '+(total===100?'ok':'bad');
+}
+atmGases.forEach(g=>{
+  const sl=document.getElementById('s_'+g);
+  const vl=document.getElementById('v_'+g);
+  sl.addEventListener('input',()=>{
+    vl.textContent=sl.value+'%';
+    if(g!=='n2') updateAtm();
+    else{const t=atmGases.reduce((s,x)=>s+(+document.getElementById('s_'+x).value),0);const el=document.getElementById('atm-total');el.textContent='Total: '+t+'%';el.className='atm-total '+(t===100?'ok':'bad');}
+  });
+});
+[['temp','°C'],['lightning',''],['geo',''],['ph',''],['grav','g'],['dur','']].forEach(([id,sfx])=>{
+  const sl=document.getElementById('s_'+id),vl=document.getElementById('v_'+id);
+  if(sl) sl.addEventListener('input',()=>{vl.textContent=(id==='ph'?parseFloat(sl.value).toFixed(1):sl.value)+sfx});
+});
+document.getElementById('t_vents').addEventListener('click',function(){
+  this.classList.toggle('on');
+  this.dataset.val=this.classList.contains('on')?'yes':'no';
+});
+
+// ─── COLLECT PARAMS ───────────────────────────────────────────
+function collectParams(){
+  return {
+    atm_CH4:+document.getElementById('s_ch4').value,
+    atm_NH3:+document.getElementById('s_nh3').value,
+    atm_H2:+document.getElementById('s_h2').value,
+    atm_CO2:+document.getElementById('s_co2').value,
+    atm_N2:+document.getElementById('s_n2').value,
+    atm_H2O:+document.getElementById('s_h2o').value,
+    temperature:+document.getElementById('s_temp').value,
+    lightning:+document.getElementById('s_lightning').value,
+    geothermal:+document.getElementById('s_geo').value,
+    uv:document.getElementById('s_uv').value,
+    ocean_pH:+document.getElementById('s_ph').value,
+    solvent:document.getElementById('s_solvent').value,
+    clay:document.getElementById('s_clay').value,
+    sulfur_phosphate:document.getElementById('s_phos').value,
+    metal_ions:document.getElementById('s_metals').value,
+    hydrothermal:document.getElementById('t_vents').classList.contains('on'),
+    wet_dry:document.getElementById('s_wetdry').value,
+    gravity:+document.getElementById('s_grav').value,
+  };
+}
+
+function populateSliders(p){
+  const ep=p.engine_params||p;
+  const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!==undefined){el.value=val;el.dispatchEvent(new Event('input'));}};
+  set('s_ch4',ep.atm_CH4);set('s_nh3',ep.atm_NH3);set('s_h2',ep.atm_H2);
+  set('s_co2',ep.atm_CO2);set('s_n2',ep.atm_N2);set('s_h2o',ep.atm_H2O);
+  set('s_temp',ep.temperature);set('s_lightning',ep.lightning);
+  set('s_geo',ep.geothermal);set('s_ph',ep.ocean_ph);set('s_grav',ep.gravity);
+  const selMap={'s_uv':ep.uv,'s_solvent':ep.solvent,'s_clay':ep.clay,'s_phos':ep.sulfur_phosphate,'s_metals':ep.metal_ions,'s_wetdry':ep.wet_dry};
+  Object.entries(selMap).forEach(([id,val])=>{const el=document.getElementById(id);if(el&&val)el.value=val;});
+  const vents=document.getElementById('t_vents');
+  const isOn=ep.hydrothermal===true||ep.hydrothermal==='yes';
+  vents.classList.toggle('on',isOn);vents.dataset.val=isOn?'yes':'no';
+  updateAtm();
+}
+
+// ─── EXOPLANETS ───────────────────────────────────────────────
+let planetsLoaded=false;
+async function loadPlanets(){
+  const sel=document.getElementById('planet-select');
+  try{
+    const r=await fetch(API+'/planets');if(!r.ok) throw new Error('HTTP '+r.status);
+    const planets=await r.json();
+    sel.innerHTML='<option value="">— Select a planet —</option>';
+    planets.forEach(p=>{const opt=document.createElement('option');opt.value=p.name||p;opt.textContent=p.name||p;if(p.data_quality)opt.dataset.quality=p.data_quality;sel.appendChild(opt);});
+    planetsLoaded=true;
+  }catch(e){sel.innerHTML='<option value="">⚠ Failed to load planets</option>';}
+}
+document.getElementById('planet-select').addEventListener('change',async function(){
+  const name=this.value;if(!name)return;
+  const qual=this.options[this.selectedIndex].dataset.quality||'estimated from density';
+  const badgeRow=document.getElementById('planet-badge-row');
+  const info=document.getElementById('planet-info');
+  const badgeClass=qual.includes('JWST')?'badge-jwst':qual.includes('literature')?'badge-lit':'badge-est';
+  badgeRow.innerHTML=`<span class="planet-badge ${badgeClass}">${qual}</span>`;
+  info.textContent='Loading…';
+  const il=document.getElementById('input-loading');il.classList.remove('hidden');
+  try{
+    const r=await fetch(API+'/planets/'+encodeURIComponent(name));if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();populateSliders(data);
+    info.textContent=`Parameters loaded for ${name}.`;
+    document.getElementById('exo-params-summary').textContent=`T=${data.temperature??'?'}°C · pH=${data.ocean_ph??'?'} · g=${data.gravity??'?'}`;
+  }catch(e){info.innerHTML=`<span style="color:var(--red)">Error: ${e.message}</span>`;}
+  finally{il.classList.add('hidden')}
+});
+
+// ─── COLOUR HELPERS ───────────────────────────────────────────
+function verdictColor(score){return score>=70?'green':score>=50?'blue':score>=30?'amber':'red'}
+function stageColor(score){return score>=70?'var(--green)':score>=50?'var(--blue)':score>=30?'var(--amber)':'var(--red)'}
+
+// ─── GENERATE PLANET PROFILE ──────────────────────────────────
+function generatePlanetProfile(params){
+  const lines=[];const t=params.temperature;
+  if(t>200) lines.push("Scorching hellscape — surface temperatures destroy organic molecules on contact.");
+  else if(t>80) lines.push("Hot volatile surface with intense geochemical activity.");
+  else if(t>=0&&t<=80) lines.push("Temperate surface with liquid water — optimal conditions for prebiotic chemistry.");
+  else if(t>-40) lines.push("Cold surface, liquid water marginal, extensive ice sheets likely.");
+  else lines.push("Frozen surface — chemistry proceeds slowly, possible liquid subsurface ocean.");
+  if(params.atm_CO2>50) lines.push("Thick suffocating CO₂ atmosphere produces crushing greenhouse conditions.");
+  else if(params.atm_N2>60) lines.push("Clear nitrogen-dominated sky, similar to early Earth — good UV shielding.");
+  else if(params.atm_CH4>20) lines.push("Dense orange methane haze blankets the sky — Titan-like, visibility near zero.");
+  else if(params.atm_H2>30) lines.push("Hydrogen-rich reducing atmosphere — highly reactive, energetically favourable for organics.");
+  if(params.solvent==='ammonia') lines.push("Ammonia lakes replace oceans — exotic chemistry, no Earth analogue.");
+  else if(params.solvent==='methane') lines.push("Liquid methane seas cover the surface — water absent, radically alien.");
+  else if(t>=0&&t<=100) lines.push("Liquid water oceans likely — the universal solvent for known life.");
+  if(params.geothermal>300) lines.push("Hypervolcanic terrain — constant eruptions resurface and chemically enrich the crust.");
+  else if(params.geothermal>150) lines.push("Moderate volcanic activity provides steady mineral and chemical cycling.");
+  if(params.hydrothermal===true||params.hydrothermal==='yes') lines.push("Hydrothermal vent fields on the ocean floor — the most chemically rich environments known.");
+  if(params.gravity>2.0) lines.push("Crushing surface gravity compresses the atmosphere to extreme density.");
+  else if(params.gravity<0.4) lines.push("Very low gravity — thin fragile atmosphere, easily stripped by stellar wind.");
+  if(params.uv==='high') lines.push("Intense stellar UV bombardment — surface sterilising, life would require shielding.");
+  if(params.clay==='montmorillonite') lines.push("Clay-rich mineral surfaces — natural polymer templates for amino acid chains.");
+  return lines.slice(0,6).join(' ');
+}
+
+// ─── GENERATE LIFE FORM ───────────────────────────────────────
+function generateLifeForm(params,data){
+  const score=data.overall_score||0;const t=params.temperature;const solvent=params.solvent||'water';
+  let confidence,confColor;
+  if(score>=0.75){confidence='High Confidence';confColor='green';}
+  else if(score>=0.55){confidence='Moderate';confColor='blue';}
+  else if(score>=0.35){confidence='Low';confColor='amber';}
+  else{confidence='Speculative';confColor='red';}
+  let name,description;const traits=[];
+  if(solvent==='ammonia'){name='Cryogenic Chemolithotroph';description='Slow-metabolism organism exploiting ammonia as universal solvent. Relies on nitrogen-rich chemistry for energy cycling in frigid subsurface reservoirs — no Earth analogue known.';traits.push('Ammonia solvent','Cryophilic','Chemotrophic','Nitrogen cycling');}
+  else if(solvent==='methane'){name='Acrylonitrile Membrane Organism';description='Cell-membrane analogue built from acrylonitrile polymers floating in liquid methane seas. Metabolises acetylene and hydrogen — no liquid water required.';traits.push('Methane solvent','Acetylene metabolism','Acrylonitrile membrane','Extreme cold');}
+  else if(t>200){name='Theoretical Thermal Extremophile';description='At these temperatures conventional biochemistry is untenable. Any life form would require entirely novel molecular scaffolding beyond current models.';traits.push('Hypothetical','Novel biochemistry','Extreme thermophile');}
+  else if(t>80){name='Hyperthermophilic Archaeon';description='Heat-resistant microorganism thriving in near-boiling hydrothermal environments. Uses sulfur compounds as electron donors and heat-stable proteins to maintain structure.';traits.push('Hyperthermophile','Sulfur metabolism','Vent-dwelling','Thermostable proteins');}
+  else if(t>=0&&t<=80){
+    if(params.atm_CH4>15||params.atm_H2>20){name='Methanogenic Prokaryote';description='Anaerobic microorganism producing methane from H₂ and CO₂ in a reducing atmosphere. Likely the earliest and most cosmically common metabolic archetype.';traits.push('Anaerobic','Methanogenic','H₂-dependent','Reducing atmosphere');}
+    else if(params.hydrothermal){name='Vent-Adapted Protocell';description='Lipid vesicle protocell clustering near alkaline hydrothermal vents, harvesting proton gradients across thin membranes — the most plausible first-life scenario known.';traits.push('Protocell','Proton gradient','Alkaline vent','Lipid membrane');}
+    else{name='Photosynthetic Surface Microbe';description='Pigment-bearing microorganism on shallow lake surfaces exploiting stellar radiation, protected from UV by mineral crusts and atmospheric scattering layers.';traits.push('Photosynthetic','Surface-dwelling','Pigmented','UV-adapted');}
+  }else if(t>-40){name='Permafrost Endolith';description='Slow-metabolism organism colonising rock pores and brine pockets at ice interfaces. Antifreeze proteins maintain membrane fluidity below freezing.';traits.push('Psychrophilic','Endolithic','Antifreeze proteins','Brine-tolerant');}
+  else{name='Subsurface Chemolithotroph';description='Deep subsurface anaerobe sustained by geochemical redox gradients, insulated from surface freeze by crustal thickness. Likely dormant for millions of years between cycles.';traits.push('Subsurface','Chemolithotrophic','Anaerobic','Geothermally sustained');}
+  if(params.uv==='high') traits.push('UV shielding');
+  if(params.clay==='montmorillonite') traits.push('Clay substrate');
+  if(params.gravity<0.4) traits.push('Low-gravity adapted');
+  if(params.wet_dry==='tidal') traits.push('Tidal cycling');
+  return{name,description,confidence,confColor,traits:traits.slice(0,6)};
+}
+
+// ─── RENDER RESULTS ───────────────────────────────────────────
+function renderResults(data,planetName,params){
+  const rc=document.getElementById('results-content');
+  rc.innerHTML='';
+  document.getElementById('empty-state').classList.add('hidden');
+  rc.classList.remove('hidden');rc.style.display='flex';
+
+  const rawScore=data.overall_score??data.score??0;
+  const score=Math.round(rawScore<=1?rawScore*100:rawScore);
+  const verdict=data.verdict||data.result||'UNKNOWN';
+  const col=verdictColor(score);
+
+  // VERDICT
+  const vbox=document.createElement('div');
+  vbox.className=`verdict-box ${col}`;
+  vbox.innerHTML=`<div class="verdict-header"><div><div class="verdict-planet">${planetName||'Custom Planet'}</div><div class="verdict-text ${col}">${verdict}</div></div><div class="verdict-score ${col}">${score}%</div></div>`;
+  rc.appendChild(vbox);
+
+  // STAGES
+  const STAGE_NAMES={s1:'Organic Molecules',s2:'Amino Acids',s3:'Polymers',s4:'Autocatalytic Networks',s5:'Proto-life Potential'};
+  if(data.stages&&typeof data.stages==='object'){
+    const grid=document.createElement('div');grid.className='stages-grid';
+    Object.entries(data.stages).forEach(([key,val])=>{
+      const sp=Math.round((val??0)*100);
+      const reason=(data.reasons&&data.reasons[key])||'';
+      const src=data.prediction_source||'rule engine';
+      const mols=(data.molecules&&data.molecules[key])||[];
+      const sc=document.createElement('div');sc.className='stage-card';
+      sc.innerHTML=`<div class="stage-header"><span class="stage-name">${STAGE_NAMES[key]||key}</span><span class="stage-pct" style="color:${stageColor(sp)}">${sp}%</span></div><div class="progress"><div class="progress-fill" style="width:${sp}%;background:${stageColor(sp)}"></div></div><div class="stage-reason">${reason}</div><span class="src-badge ${src==='MINE+RDKit'?'src-ml':src==='ml_model'?'src-ml':'src-rule'}">${src}</span>`;
+      const namedMols=mols.filter(m=>m.name&&m.name!=='Autocatalytic network (predicted)'&&!m.name.startsWith('Proto-life'));
+      const specialMols=mols.filter(m=>m.name==='Autocatalytic network (predicted)'||m.name.startsWith('Proto-life'));
+      const allMols=[...namedMols,...specialMols];
+      if(allMols.length>0){
+        const toggle=document.createElement('button');toggle.className='mol-toggle';
+        toggle.innerHTML=`<i class="mol-chevron">▶</i> ${allMols.length} molecule${allMols.length>1?'s':''} detected`;
+        sc.appendChild(toggle);
+        const drawer=document.createElement('div');drawer.className='mol-drawer';
+        allMols.forEach(mol=>{
+          const stab=mol.stability_score??0;
+          const stabClass=stab>0.6?'high':stab>=0.3?'mid':'low';
+          const state=mol.state_at_conditions||'';
+          const formula=mol.formula&&mol.formula!=='varies'&&mol.formula!=='multi-component'&&mol.formula!=='emergent'?mol.formula:'';
+          const hasStructure=mol.smiles&&mol.smiles.length>0&&mol.state_at_conditions!=='network'&&mol.state_at_conditions!=='emergent';
+          const mw=mol.molecular_weight;const hasMW=mw!=null&&mw>0;
+          const logpVal=mol.logP;const hasLogP=logpVal!=null&&hasMW;
+          const stabPct=Math.round(stab*100);
+          const formulaPart=formula?`<span class="mol-prop-formula">${formula}</span>`:'';
+          const mwPart=hasMW?`<span class="mol-prop-mw">${mw.toFixed(2)} g/mol</span>`:'';
+          const line1=(formulaPart||mwPart)?`<div class="mol-prop-line">${[formulaPart,mwPart].filter(Boolean).join('<span class="mol-prop-sep">·</span>')}</div>`:'';
+          const line2=hasLogP?`<div class="mol-prop-line"><span class="mol-prop-logp-label">LogP</span><span class="mol-prop-logp-val">${logpVal}</span><span class="mol-prop-sep">·</span><span class="mol-prop-logp-${logpVal<0?'water':'lipid'}">${logpVal<0?'Water soluble':'Lipid soluble'}</span></div>`:'';
+          const stabBar=`<div class="mol-stab-bar-track"><div class="mol-stab-bar-fill ${stabClass}" style="width:${stabPct}%"></div></div>`;
+          const row=document.createElement('div');row.className='mol-row';
+          row.innerHTML=`<div class="mol-row-top"><span class="mol-name">${mol.name}</span>${state&&state!=='network'&&state!=='emergent'?`<span class="mol-state">${state}</span>`:''}</div><div class="mol-props">${line1}${line2}${stabBar}</div>${mol.why?`<div class="mol-why">${mol.why}</div>`:''}`;
+          if(hasStructure){
+            const structBtn=document.createElement('button');structBtn.className='mol-struct-btn';structBtn.innerHTML='⬡ structure';
+            const structWrap=document.createElement('div');structWrap.className='mol-struct-wrap';
+            let svgLoaded=false;
+            structBtn.addEventListener('click',async()=>{
+              const isOpen=structWrap.classList.contains('open');
+              structWrap.classList.toggle('open',!isOpen);structBtn.classList.toggle('active',!isOpen);
+              structBtn.innerHTML=!isOpen?'⬡ hide':'⬡ structure';
+              if(!isOpen&&!svgLoaded){
+                svgLoaded=true;structWrap.innerHTML=`<div class="mol-struct-loading">rendering…</div>`;
+                try{const r=await fetch(`${API}/mol/svg?smiles=${encodeURIComponent(mol.smiles)}`);if(!r.ok)throw new Error('render failed');const svgText=await r.text();structWrap.innerHTML=svgText;const svgEl=structWrap.querySelector('svg');if(svgEl)svgEl.style.cssText='width:220px;height:160px;display:block;margin:0 auto';}
+                catch(e){structWrap.innerHTML=`<div class="mol-struct-err">⚠ unavailable</div>`;}
+              }
+            });
+            row.appendChild(structBtn);row.appendChild(structWrap);
+          }
+          drawer.appendChild(row);
+        });
+        sc.appendChild(drawer);
+        toggle.addEventListener('click',()=>{toggle.classList.toggle('open');drawer.classList.toggle('open');});
+      }
+      grid.appendChild(sc);
+    });
+    rc.appendChild(grid);
+  }
+
+  // BIOCHEM PILL
+  const biochem=data.biochemistry||data.biochemistry_type;
+  const protoScore=data.proto_life_score??(data.stages&&data.stages.s5);
+  if(biochem||protoScore!=null){
+    const bio=document.createElement('div');bio.className='bio-row';
+    if(biochem) bio.innerHTML+=`<span class="bio-pill">${biochem}</span>`;
+    if(protoScore!=null) bio.innerHTML+=`<span class="proto-score">Proto-life score: <span>${Math.round(protoScore*100)}%</span></span>`;
+    rc.appendChild(bio);
+  }
+
+  // PLANET PROFILE
+  if(params){
+    const profileText=generatePlanetProfile(params);
+    const pcard=document.createElement('div');pcard.className='profile-card';
+    pcard.innerHTML=`<div class="profile-title">Planet Profile</div><div class="profile-body">${profileText||'No dominant environmental signature detected.'}</div>`;
+    rc.appendChild(pcard);
+
+    // LIFE FORM
+    const lf=generateLifeForm(params,data);
+    const lcard=document.createElement('div');lcard.className='life-card';
+    lcard.innerHTML=`<div class="life-card-header"><div class="life-card-label">Predicted Life Form</div><span class="life-conf-badge ${lf.confColor}">${lf.confidence}</span></div><div class="life-org-name">${lf.name}</div><div class="life-desc">${lf.description}</div><div class="life-traits">${lf.traits.map(t=>`<span class="life-trait">${t}</span>`).join('')}</div>`;
+    rc.appendChild(lcard);
+  }
+
+  // TIMELINE
+  const BASE_TIMES={s1:[1,10],s2:[10,100],s3:[100,500],s4:[500,1500],s5:[1500,4000]};
+  function estimateTime(stageKey,overallScore){const[lo,hi]=BASE_TIMES[stageKey];const t=Math.round(lo+(hi-lo)*(1-Math.min(1,overallScore)));return t<1000?`~${t} My`:`~${(t/1000).toFixed(1)} Gy`;}
+  const tStages=data.stages||{};
+  const tKeys=['s1','s2','s3','s4','s5'];
+  const tNames={s1:'Organic Molecules',s2:'Amino Acids',s3:'Polymers',s4:'Autocatalytic Networks',s5:'Proto-life Potential'};
+  const activeCount=tKeys.filter(k=>(tStages[k]||0)>0.4).length;
+  if(activeCount>=2){
+    const overall=data.overall_score||0;
+    const tl=document.createElement('div');tl.className='evo-timeline';
+    const tlTitle=document.createElement('div');tlTitle.className='evo-title';tlTitle.textContent='Chemical Evolution Timeline';tl.appendChild(tlTitle);
+    const track=document.createElement('div');track.className='evo-track';
+    tKeys.forEach(key=>{
+      const score=tStages[key]||0;const active=score>0.4;const isProto=key==='s5'&&active;
+      const mols=(data.molecules&&data.molecules[key])||[];
+      const topMol=mols.length>0&&mols[0].name?mols[0].name:null;
+      const timeStr=active?estimateTime(key,overall):null;
+      const scoreColor=score>0.65?'var(--green)':score>=0.4?'var(--amber)':'var(--muted)';
+      const dotClass=isProto?'evo-dot proto':active?(score>0.65?'evo-dot active-high':'evo-dot active-mid'):'evo-dot inactive';
+      const node=document.createElement('div');node.className='evo-node';
+      if(isProto) node.innerHTML=`<div class="${dotClass}"></div><div class="evo-content"><div class="evo-time">${timeStr}</div><div class="evo-proto-label">Proto-Life Emergence</div>${topMol?`<div class="evo-mol">${topMol}</div>`:''}<div class="evo-score" style="color:${scoreColor}">${Math.round(score*100)}%</div></div>`;
+      else if(active) node.innerHTML=`<div class="${dotClass}"></div><div class="evo-content"><div class="evo-time">${timeStr}</div><div class="evo-stage-name">${tNames[key]}</div>${topMol?`<div class="evo-mol">${topMol}</div>`:''}<div class="evo-score" style="color:${scoreColor}">${Math.round(score*100)}%</div></div>`;
+      else node.innerHTML=`<div class="${dotClass}"></div><div class="evo-content evo-content-inactive"><div class="evo-stage-name">${tNames[key]}</div><div class="evo-inactive-label">conditions not met</div></div>`;
+      track.appendChild(node);
+    });
+    tl.appendChild(track);rc.appendChild(tl);
+  }
+
+  // VALIDATION
+  const valWrap=document.createElement('div');valWrap.className='val-section';
+  valWrap.innerHTML=`<button class="val-btn" id="val-btn">⊕ View Scientific Validation</button><div id="val-content" style="margin-top:12px"></div>`;
+  rc.appendChild(valWrap);
+  document.getElementById('val-btn').addEventListener('click',loadValidation);
+}
+
+async function loadValidation(){
+  const btn=document.getElementById('val-btn');const vc=document.getElementById('val-content');
+  btn.disabled=true;btn.textContent='Loading…';
+  try{
+    const r=await fetch(API+'/validation');if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const corr=d.spearman_engine??d.spearman_correlation??d.correlation??'N/A';
+    let html=`<div class="val-header">${typeof corr==='number'?corr.toFixed(3):corr}</div><div class="val-sub">Spearman rank correlation — validation against scientific consensus</div>`;
+    if(d.planets&&d.planets.length){
+      html+=`<table><thead><tr><th>Planet</th><th>Engine</th><th>ML</th><th>Rank</th><th>JWST</th></tr></thead><tbody>`;
+      d.planets.forEach(p=>{
+        const checked=p.jwst_molecules_checked||[];const passed=p.jwst_molecules_passed||[];
+        const pass=checked.length===0||passed.length===checked.length;
+        const jwstLabel=checked.length===0?'N/A':`${passed.length}/${checked.length}`;
+        html+=`<tr><td>${p.name||'—'}</td><td>${((p.engine_score||0)*100).toFixed(0)}%</td><td>${((p.ml_score||0)*100).toFixed(0)}%</td><td>${p.consensus_rank??'—'}</td><td class="${pass?'pass':'fail'}">${jwstLabel} ${pass?'✓':'✗'}</td></tr>`;
+      });
+      html+='</tbody></table>';
+    }
+    if(d.summary) html+=`<div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.7;font-family:var(--mono)">${d.summary}</div>`;
+    vc.innerHTML=html;
+    btn.textContent='⊖ Hide Validation';btn.disabled=false;
+    btn.onclick=()=>{vc.innerHTML='';btn.textContent='⊕ View Scientific Validation';btn.onclick=loadValidation};
+  }catch(e){
+    vc.innerHTML=`<div class="error-box">Failed to load validation: ${e.message}</div>`;
+    btn.textContent='⊕ View Scientific Validation';btn.disabled=false;
+    btn.addEventListener('click',loadValidation,{once:true});
+  }
+}
+
+// ─── IMPOSSIBLE CONDITIONS ────────────────────────────────────
+function showImpossibleWarning(temp,solvent){
+  const rc=document.getElementById('results-content');
+  rc.innerHTML='';rc.classList.remove('hidden');rc.style.display='flex';
+  document.getElementById('empty-state').classList.add('hidden');
+  const warn=document.createElement('div');warn.style='padding:32px;text-align:center;width:100%';
+  warn.innerHTML=`<div style="color:var(--red);font-family:var(--mono);font-size:13px;font-weight:700;margin-bottom:14px;letter-spacing:.06em;text-transform:uppercase">Physically Impossible Conditions</div>
+  <div style="color:var(--text2);font-size:13px;line-height:1.8">At ${temp}°C with <strong style="color:var(--text)">${solvent}</strong> as solvent, no stable liquid phase exists.<br>All organic molecules denature or cannot form.</div>
+  <div style="margin-top:16px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:2;letter-spacing:.04em">Water: −10°C to 150°C · Ammonia: −100°C to −30°C · Methane: −200°C to −100°C</div>`;
+  rc.appendChild(warn);
+}
+
+// ─── RUN ─────────────────────────────────────────────────────
+let selectedPlanet='';
+document.getElementById('planet-select').addEventListener('change',function(){selectedPlanet=this.value});
+document.getElementById('run-btn').addEventListener('click',async()=>{
+  const btn=document.getElementById('run-btn');const rl=document.getElementById('results-loading');
+  btn.disabled=true;btn.textContent='⏳ Simulating…';rl.classList.remove('hidden');
+  document.getElementById('empty-state').classList.remove('hidden');
+  document.getElementById('results-content').classList.add('hidden');
+  document.getElementById('results-content').style.display='none';
+  const params=collectParams();
+  const planetName=activeTab==='exo'?selectedPlanet:'Custom Planet';
+  const _t=params.temperature,_s=params.solvent;let _imp=false;
+  if(_s==='water'&&(_t>150||_t<-50))_imp=true;
+  if(_s==='ammonia'&&(_t>-30||_t<-100))_imp=true;
+  if(_s==='methane'&&(_t>-100||_t<-200))_imp=true;
+  if(_imp){showImpossibleWarning(_t,_s);btn.disabled=false;btn.textContent='▶ Run Simulation';rl.classList.add('hidden');return;}
+  try{
+    const r=await fetch(API+'/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(params)});
+    if(!r.ok){const t=await r.text();throw new Error(`HTTP ${r.status}: ${t.slice(0,120)}`)}
+    const data=await r.json();renderResults(data,planetName,params);
+  }catch(e){
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('empty-state').innerHTML=`<div class="error-box" style="text-align:left;max-width:360px"><strong>Simulation failed</strong><br>${e.message}</div>`;
+  }finally{rl.classList.add('hidden');btn.disabled=false;btn.textContent='▶ Run Simulation';}
+});
+
+updateAtm();
+</script>
+</body>
+</html>
